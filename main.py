@@ -1,5 +1,5 @@
 import typer
-from app.ingestion import load_dataset
+from app.ingestion import load_dataset, analyze_dataset
 from app.config import Config
 
 def run_pipeline(
@@ -12,8 +12,14 @@ def run_pipeline(
     """
     config = Config(file_path=file_path, target_column=target, task_type=task)
     df = load_dataset(config.file_path)
-    typer.echo(f"✅ Dataset loaded with shape: {df.shape}")
-    typer.echo(f"🎯 Target Column: {config.target_column}, Task Type: {config.task_type}")
+
+    typer.echo(f"✅ Dataset loaded: {df.shape[0]} rows × {df.shape[1]} columns")
+
+    summary = analyze_dataset(df)
+    typer.echo("📊 Column Types:")
+    typer.echo(summary["column_types"])
+    typer.echo(f"🧼 Missing Values:\n{summary['missing_and_duplicates']['missing_values']}")
+    typer.echo(f"📛 Duplicates: {summary['missing_and_duplicates']['num_duplicates']}")
 
 if __name__ == "__main__":
     typer.run(run_pipeline)

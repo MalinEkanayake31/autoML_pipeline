@@ -1,5 +1,7 @@
-from app.ingestion import load_dataset
+from app.ingestion import load_dataset, analyze_dataset
 
-def test_load_dataset():
+def test_analyze_dataset():
     df = load_dataset("data/sample_dataset.csv")
-    assert not df.empty
+    profile = analyze_dataset(df)
+    assert "column_types" in profile
+    assert "missing_and_duplicates" in profile

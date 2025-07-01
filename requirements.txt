@@ -3,3 +3,5 @@ numpy
 typer
 pydantic
 pyyaml
+seaborn
+matplotlib

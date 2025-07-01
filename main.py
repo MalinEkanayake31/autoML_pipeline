@@ -1,6 +1,8 @@
 import typer
 from app.ingestion import load_dataset, analyze_dataset
 from app.config import Config
+from app.eda import perform_eda, save_eda_report
+
 
 def run_pipeline(
     file_path: str = typer.Option(..., "--file-path", "-f", help="Path to your dataset CSV"),
@@ -20,6 +22,13 @@ def run_pipeline(
     typer.echo(summary["column_types"])
     typer.echo(f"🧼 Missing Values:\n{summary['missing_and_duplicates']['missing_values']}")
     typer.echo(f"📛 Duplicates: {summary['missing_and_duplicates']['num_duplicates']}")
+
+    typer.echo("\n🔍 Running EDA...")
+    eda_results = perform_eda(df, target)
+    typer.echo(f"🧮 Class Balance: {eda_results['class_balance']}")
+
+    save_eda_report(eda_results)
+    typer.echo("📁 EDA report saved to outputs/eda_report.json")
 
 if __name__ == "__main__":
     typer.run(run_pipeline)

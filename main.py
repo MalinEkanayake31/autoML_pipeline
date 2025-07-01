@@ -3,7 +3,7 @@ from app.ingestion import load_dataset, analyze_dataset
 from app.config import Config
 from app.eda import perform_eda, save_eda_report
 from app.cleaning import clean_data, save_cleaned_data
-
+from app.features import feature_engineering_pipeline
 
 
 def run_pipeline(
@@ -36,6 +36,13 @@ def run_pipeline(
     save_cleaned_data(cleaned_df)
     typer.echo(f"🧹 Cleaned Data Shape: {cleaned_df.shape}")
     typer.echo("📁 Cleaned data saved to outputs/cleaned_data.csv")
+
+    typer.echo("\n🛠️ Running Feature Engineering...")
+    final_df = feature_engineering_pipeline(cleaned_df, encoding="onehot", scale="standard", drop_corr=False)
+
+    output_path = "outputs/processed_data.csv"
+    final_df.to_csv(output_path, index=False)
+    typer.echo(f"🧠 Final processed data saved to {output_path}")
 
 if __name__ == "__main__":
     typer.run(run_pipeline)

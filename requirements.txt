@@ -5,3 +5,4 @@ pydantic
 pyyaml
 seaborn
 matplotlib
+scikit-learn

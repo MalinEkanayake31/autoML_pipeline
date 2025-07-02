@@ -4,6 +4,7 @@ from app.config import Config
 from app.eda import perform_eda, save_eda_report
 from app.cleaning import clean_data, save_cleaned_data
 from app.features import feature_engineering_pipeline
+from app.feature_selection import feature_selection_pipeline
 
 
 def run_pipeline(
@@ -43,6 +44,21 @@ def run_pipeline(
     output_path = "outputs/processed_data.csv"
     final_df.to_csv(output_path, index=False)
     typer.echo(f"🧠 Final processed data saved to {output_path}")
+
+    typer.echo("\n📉 Running Feature Selection...")
+
+    if target in final_df.columns:
+        X = final_df.drop(columns=[target])
+        y = final_df[target]
+        selected_df = feature_selection_pipeline(X, y, method="rfe", k=10)
+        selected_df[target] = y.reset_index(drop=True)
+    else:
+        typer.echo(f"⚠️ Target column '{target}' not found in processed data. Falling back to variance selection.")
+        selected_df = feature_selection_pipeline(final_df, None, method="variance")
+
+    selected_path = "outputs/selected_features.csv"
+    selected_df.to_csv(selected_path, index=False)
+    typer.echo(f"✅ Selected features saved to {selected_path}")
 
 if __name__ == "__main__":
     typer.run(run_pipeline)

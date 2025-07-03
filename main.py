@@ -5,6 +5,7 @@ from app.eda import perform_eda, save_eda_report
 from app.cleaning import clean_data, save_cleaned_data
 from app.features import feature_engineering_pipeline
 from app.feature_selection import feature_selection_pipeline
+from app.model_selection import model_selection_pipeline
 
 
 def run_pipeline(
@@ -59,6 +60,12 @@ def run_pipeline(
     selected_path = "outputs/selected_features.csv"
     selected_df.to_csv(selected_path, index=False)
     typer.echo(f"✅ Selected features saved to {selected_path}")
+
+    typer.echo("\n🏁 Running Model Selection...")
+    model_result = model_selection_pipeline(selected_df, target_column=target, task_type=task)
+    typer.echo(f"✅ Best Model: {model_result['model']}")
+    typer.echo(f"📊 Metrics: {model_result['metrics']}")
+    typer.echo("📁 Best model saved to models/best_model.pkl")
 
 if __name__ == "__main__":
     typer.run(run_pipeline)

@@ -66,43 +66,96 @@ def run_pipeline(
         save_cleaned_data(cleaned_df)
         typer.echo("📁 Cleaned data saved to outputs/cleaned_data.csv")
 
-        # Step 5: Feature Engineering
+        # FIXED: Step 5: Feature Engineering - Separate target before processing
         typer.echo("\n🛠️ Running Feature Engineering...")
-        processed_df = feature_engineering_pipeline(cleaned_df)
+
+        # Check if target column exists
+        if target not in cleaned_df.columns:
+            typer.echo(f"❌ Error: Target column '{target}' not found in cleaned data")
+            typer.echo(f"Available columns: {cleaned_df.columns.tolist()}")
+            return
+
+        # Separate features and target BEFORE feature engineering
+        X_clean = cleaned_df.drop(columns=[target])
+        y_clean = cleaned_df[target].copy()
+
+        typer.echo(f"📊 Features shape before engineering: {X_clean.shape}")
+        typer.echo(f"📊 Target shape: {y_clean.shape}")
+
+        # Apply feature engineering only to features
+        X_processed = feature_engineering_pipeline(X_clean)
+
+        # Combine processed features with original target
+        processed_df = X_processed.copy()
+        processed_df[target] = y_clean
+
         processed_df.to_csv("outputs/processed_data.csv", index=False)
-        typer.echo("🧠 Final processed data saved to outputs/processed_data.csv")
+        typer.echo(f"🧠 Feature engineering completed. Shape: {processed_df.shape}")
+        typer.echo("📁 Processed data saved to outputs/processed_data.csv")
 
         # Step 6: Feature Selection
         typer.echo("\n📉 Running Feature Selection...")
-        # Separate features and target BEFORE feature selection
-        if target not in processed_df.columns:
-            typer.echo(f"❌ Error: Target column '{target}' not found in processed data")
-            typer.echo(f"Available columns: {processed_df.columns.tolist()}")
-            return
 
-        # Split features and target
-        X = processed_df.drop(columns=[target])
-        y = processed_df[target]
+        # Split features and target for feature selection
+        X_for_selection = processed_df.drop(columns=[target])
+        y_for_selection = processed_df[target]
 
-        # Apply feature selection on features only
-        selected_X = feature_selection_pipeline(X, y, method=feature_selection_method, k=num_features)
+        typer.echo(f"📊 Features for selection: {X_for_selection.shape}")
+        typer.echo(f"📊 Target for selection: {y_for_selection.shape}")
 
-        # Combine selected features with target
-        selected_df = selected_X.copy()
-        selected_df[target] = y
+        # Apply feature selection
+        try:
+            selected_X = feature_selection_pipeline(
+                X_for_selection,
+                y_for_selection,
+                method=feature_selection_method,
+                k=min(num_features, X_for_selection.shape[1]),  # Don't select more features than available
+                task_type=task
+            )
 
-        selected_df.to_csv("outputs/selected_features.csv", index=False)
-        typer.echo("✅ Selected features saved to outputs/selected_features.csv")
-        typer.echo(f"🧪 Shape of selected_df: {selected_df.shape}")
-        typer.echo(f"🧪 Columns: {selected_df.columns.tolist()}")
+            # Combine selected features with target
+            selected_df = selected_X.copy()
+            selected_df[target] = y_for_selection
+
+            selected_df.to_csv("outputs/selected_features.csv", index=False)
+            typer.echo(f"✅ Feature selection completed. Shape: {selected_df.shape}")
+            typer.echo(f"🧪 Selected features: {selected_X.columns.tolist()}")
+            typer.echo("📁 Selected features saved to outputs/selected_features.csv")
+
+        except Exception as e:
+            typer.echo(f"⚠️ Feature selection failed: {str(e)}")
+            typer.echo("📝 Using all processed features instead...")
+            selected_df = processed_df.copy()
 
         # Step 7: Model Selection
         typer.echo("\n🏁 Running Model Selection...")
-        typer.echo(f"📊 DEBUG: Shape of df before split: {selected_df.shape}")
-        typer.echo(f"📊 DEBUG: Target column: {target}")
-        typer.echo(f"📊 DEBUG: y head:\n {y.head()}")
-        typer.echo(f"📊 DEBUG: y shape: {y.shape}")
+        typer.echo(f"📊 Final data shape: {selected_df.shape}")
+        typer.echo(f"📊 Target column: {target}")
+        typer.echo(f"📊 Available columns: {selected_df.columns.tolist()}")
 
+        # Verify target column exists in final dataset
+        if target not in selected_df.columns:
+            typer.echo(f"❌ Error: Target column '{target}' missing from final dataset")
+            return
+
+        # Check for any remaining issues
+        final_X = selected_df.drop(columns=[target])
+        final_y = selected_df[target]
+
+        typer.echo(f"📊 Final X shape: {final_X.shape}")
+        typer.echo(f"📊 Final y shape: {final_y.shape}")
+        typer.echo(f"📊 Final y sample values: {final_y.head().tolist()}")
+
+        # Check for any NaN values that might cause issues
+        if final_X.isna().any().any():
+            typer.echo("⚠️ Warning: NaN values found in features")
+            typer.echo(f"NaN counts: {final_X.isna().sum().sum()}")
+
+        if final_y.isna().any():
+            typer.echo("⚠️ Warning: NaN values found in target")
+            typer.echo(f"NaN count in target: {final_y.isna().sum()}")
+
+        # Run model selection
         model_result = model_selection_pipeline(selected_df, target_column=target, task_type=task)
         typer.echo(f"✅ Best Model: {model_result['model']}")
         typer.echo(f"📊 Metrics: {model_result['metrics']}")

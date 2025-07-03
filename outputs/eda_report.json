@@ -1,105 +1,69 @@
 {
     "numerical_summary": {
-        "bath": {
-            "count": 13247.0,
-            "mean": 2.6926096474673513,
-            "std": 1.3414580781243859,
-            "min": 1.0,
-            "25%": 2.0,
-            "50%": 2.0,
-            "75%": 3.0,
-            "max": 40.0
+        "age": {
+            "count": 500.0,
+            "mean": 41.278,
+            "std": 13.389072055262158,
+            "min": 18.0,
+            "25%": 30.0,
+            "50%": 42.0,
+            "75%": 52.0,
+            "max": 64.0
         },
-        "balcony": {
-            "count": 12711.0,
-            "mean": 1.5843757375501535,
-            "std": 0.8172634299202003,
+        "salary": {
+            "count": 500.0,
+            "mean": 73283.368,
+            "std": 26734.180601496708,
+            "min": 30055.0,
+            "25%": 50377.5,
+            "50%": 71492.5,
+            "75%": 96210.75,
+            "max": 119930.0
+        },
+        "experience": {
+            "count": 500.0,
+            "mean": 20.126,
+            "std": 11.277254850091303,
             "min": 0.0,
-            "25%": 1.0,
-            "50%": 2.0,
-            "75%": 2.0,
-            "max": 3.0
+            "25%": 11.0,
+            "50%": 20.0,
+            "75%": 30.0,
+            "max": 39.0
         },
-        "price": {
-            "count": 13320.0,
-            "mean": 112.5656265015015,
-            "std": 148.97167376967403,
-            "min": 8.0,
-            "25%": 50.0,
-            "50%": 72.0,
-            "75%": 120.0,
-            "max": 3600.0
+        "label": {
+            "count": 500.0,
+            "mean": 0.388,
+            "std": 0.4877825988362592,
+            "min": 0.0,
+            "25%": 0.0,
+            "50%": 0.0,
+            "75%": 1.0,
+            "max": 1.0
         }
     },
     "categorical_summary": {
-        "area_type": {
-            "Super built-up  Area": "8790",
-            "Built-up  Area": "2418",
-            "Plot  Area": "2025",
-            "Carpet  Area": "87"
-        },
-        "availability": {
-            "Ready To Move": "10581",
-            "18-Dec": "307",
-            "18-May": "295",
-            "18-Apr": "271",
-            "18-Aug": "200",
-            "19-Dec": "185",
-            "18-Jul": "143",
-            "18-Mar": "131",
-            "18-Jun": "99",
-            "20-Dec": "98"
+        "department": {
+            "Marketing": "131",
+            "HR": "129",
+            "Engineering": "126",
+            "Sales": "114"
         },
         "location": {
-            "Whitefield": "540",
-            "Sarjapur  Road": "399",
-            "Electronic City": "302",
-            "Kanakpura Road": "273",
-            "Thanisandra": "234",
-            "Yelahanka": "213",
-            "Uttarahalli": "186",
-            "Hebbal": "177",
-            "Marathahalli": "175",
-            "Raja Rajeshwari Nagar": "171"
+            "New York": "136",
+            "San Francisco": "130",
+            "Chicago": "118",
+            "Austin": "116"
         },
-        "size": {
-            "2 BHK": "5199",
-            "3 BHK": "4310",
-            "4 Bedroom": "826",
-            "4 BHK": "591",
-            "3 Bedroom": "547",
-            "1 BHK": "538",
-            "2 Bedroom": "329",
-            "5 Bedroom": "297",
-            "6 Bedroom": "191",
-            "1 Bedroom": "105"
-        },
-        "society": {
-            "GrrvaGr": "80",
-            "PrarePa": "76",
-            "Sryalan": "59",
-            "Prtates": "59",
-            "GMown E": "56",
-            "Prtanha": "51",
-            "Bhmesy ": "51",
-            "Prityel": "50",
-            "PrityTr": "49",
-            "Prarkun": "49"
-        },
-        "total_sqft": {
-            "1200": "843",
-            "1100": "221",
-            "1500": "205",
-            "2400": "196",
-            "600": "180",
-            "1000": "172",
-            "1350": "133",
-            "1050": "123",
-            "1300": "117",
-            "1250": "114"
+        "education_level": {
+            "Masters": "175",
+            "Bachelors": "170",
+            "PhD": "155"
         }
     },
     "class_balance": {
-        "error": "Target column not found in dataset"
+        "class_distribution": {
+            "0": 306,
+            "1": 194
+        }
     }
 }

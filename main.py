@@ -8,8 +8,8 @@ from app.config import Config
 from app.ingestion import load_dataset, analyze_dataset
 from app.cleaning import clean_data, save_cleaned_data
 from app.eda import perform_eda, save_eda_report
-from app.features import feature_engineering_pipeline
-from app.feature_selection import feature_selection_pipeline
+from app.features import robust_feature_engineering_pipeline
+from app.feature_selection import robust_feature_selection_pipeline
 from app.model_selection import model_selection_pipeline
 
 app = typer.Typer()
@@ -34,8 +34,8 @@ def detect_task_type(df: pd.DataFrame, target_column: str) -> str:
         unique_values = target.nunique()
         total_values = len(target)
 
-        # If less than 10 unique values OR less than 5% unique values, treat as classification
-        if unique_values <= 10 or (unique_values / total_values) < 0.05:
+        # If less than 20 unique values AND less than 10% unique values, treat as classification
+        if unique_values <= 20 and (unique_values / total_values) < 0.1:
             return "classification"
         else:
             return "regression"
@@ -62,7 +62,7 @@ def validate_target_column(df: pd.DataFrame, target_column: str) -> tuple[bool, 
 
     if not suggestions:
         # Look for common target column patterns
-        common_targets = ['target', 'label', 'class', 'y', 'output', 'result', 'prediction']
+        common_targets = ['target', 'label', 'class', 'y', 'output', 'result', 'prediction', 'outcome']
         for col in df.columns:
             if any(pattern in col.lower() for pattern in common_targets):
                 suggestions.append(col)
@@ -104,8 +104,8 @@ def run_pipeline(
         task: str = typer.Option("auto", "--task", help="Task type: classification, regression, or auto"),
         missing_strategy: str = typer.Option("drop", "--missing-strategy",
                                              help="Strategy for missing values: drop, mean, mode"),
-        feature_selection_method: str = typer.Option("variance", "--feature-selection",
-                                                     help="Feature selection method: variance, rfe, mutual_info"),
+        feature_selection_method: str = typer.Option("auto", "--feature-selection",
+                                                     help="Feature selection method: variance, rfe, mutual_info, univariate, auto"),
         num_features: int = typer.Option(10, "--num-features", help="Number of features to select"),
         show_info: bool = typer.Option(False, "--show-info", help="Show dataset information and exit")
 ):
@@ -147,15 +147,17 @@ def run_pipeline(
         # Step 2: Analyze dataset
         typer.echo("\n🔍 Analyzing dataset...")
         analysis = analyze_dataset(df)
-        typer.echo(f"📊 Column Types:\n{analysis['column_types']}")
-        typer.echo(f"🧼 Missing Values:\n{analysis['missing_and_duplicates']['missing_values']}")
+        typer.echo(f"📊 Column Types: {analysis['column_types']}")
+        typer.echo(f"🧼 Missing Values: {sum(analysis['missing_and_duplicates']['missing_values'].values())} total")
         typer.echo(f"📛 Duplicates: {analysis['missing_and_duplicates']['num_duplicates']}")
 
         # Step 3: EDA
         typer.echo("\n🔍 Running EDA...")
         eda_report = perform_eda(df, target)
-        typer.echo(f"🧮 Class Balance: {eda_report['class_balance']}")
+        if 'error' not in eda_report['class_balance']:
+            typer.echo(f"🧮 Class Balance: {eda_report['class_balance']['class_distribution']}")
         save_eda_report(eda_report)
+        typer.echo("📁 EDA report saved to outputs/eda_report.json")
 
         # Step 4: Clean data
         typer.echo("\n🧽 Cleaning Data...")
@@ -180,132 +182,101 @@ def run_pipeline(
 
         # Step 5: Feature Engineering
         typer.echo("\n🛠️ Running Feature Engineering...")
+        original_shape = cleaned_df.shape
 
-        # Separate features and target BEFORE feature engineering
-        X_clean = cleaned_df.drop(columns=[target])
-        y_clean = cleaned_df[target].copy()
+        engineered_df = robust_feature_engineering_pipeline(
+            cleaned_df,
+            target_column=target,
+            encoding="onehot",
+            scale="standard",
+            drop_corr=True,
+            correlation_threshold=0.95,
+            max_cardinality=20
+        )
 
-        typer.echo(f"📊 Features shape before engineering: {X_clean.shape}")
-        typer.echo(f"📊 Target shape: {y_clean.shape}")
-
-        # Check for NaN in target before processing
-        if y_clean.isna().any():
-            typer.echo(
-                f"⚠️ Warning: {y_clean.isna().sum()} NaN values found in target column before feature engineering")
-
-        # Apply feature engineering only to features (NOT the target)
-        X_processed = feature_engineering_pipeline(X_clean)
-
-        # Combine processed features with original target
-        processed_df = X_processed.copy()
-        processed_df[target] = y_clean
-
-        # Verify target column after combining
-        if processed_df[target].isna().any():
-            typer.echo(
-                f"⚠️ Warning: {processed_df[target].isna().sum()} NaN values found in target column after feature engineering")
-        else:
-            typer.echo("✅ Target column has no NaN values after feature engineering")
-
-        processed_df.to_csv("outputs/processed_data.csv", index=False)
-        typer.echo(f"🧠 Feature engineering completed. Shape: {processed_df.shape}")
-        typer.echo("📁 Processed data saved to outputs/processed_data.csv")
+        typer.echo(f"🧠 Feature engineering completed. Shape: {original_shape} → {engineered_df.shape}")
+        engineered_df.to_csv("outputs/engineered_data.csv", index=False)
+        typer.echo("📁 Engineered data saved to outputs/engineered_data.csv")
 
         # Step 6: Feature Selection
         typer.echo("\n📉 Running Feature Selection...")
+        original_shape = engineered_df.shape
 
-        # Split features and target for feature selection
-        X_for_selection = processed_df.drop(columns=[target])
-        y_for_selection = processed_df[target]
+        # Adjust num_features based on available features
+        available_features = engineered_df.shape[1] - 1  # Subtract 1 for target column
+        max_features = min(num_features, available_features, 50)  # Cap at 50 features
 
-        typer.echo(f"📊 Features for selection: {X_for_selection.shape}")
-        typer.echo(f"📊 Target for selection: {y_for_selection.shape}")
-
-        # Final check before feature selection
-        if y_for_selection.isna().any():
-            typer.echo(f"⚠️ Warning: {y_for_selection.isna().sum()} NaN values in target before feature selection")
-            # Drop rows with NaN in target
-            valid_mask = ~y_for_selection.isna()
-            X_for_selection = X_for_selection[valid_mask]
-            y_for_selection = y_for_selection[valid_mask]
+        if max_features != num_features:
             typer.echo(
-                f"🧹 Removed rows with NaN in target. New shape: X={X_for_selection.shape}, y={y_for_selection.shape}")
+                f"⚠️ Adjusting feature count from {num_features} to {max_features} (available: {available_features})")
 
-        # Apply feature selection
         try:
-            # Ensure we don't select more features than available
-            max_features = min(num_features, X_for_selection.shape[1])
-            if max_features != num_features:
-                typer.echo(f"⚠️ Adjusting feature count from {num_features} to {max_features} (max available)")
-
-            selected_X = feature_selection_pipeline(
-                X_for_selection,
-                y_for_selection,
+            selected_df = robust_feature_selection_pipeline(
+                engineered_df,
+                target_column=target,
                 method=feature_selection_method,
                 k=max_features,
-                task_type=task
+                task_type=task,
+                variance_threshold=0.01
             )
 
-            # Combine selected features with target
-            selected_df = selected_X.copy()
-            selected_df[target] = y_for_selection.reset_index(drop=True)  # Reset index to align properly
+            typer.echo(f"✅ Feature selection completed. Shape: {original_shape} → {selected_df.shape}")
+            selected_features = [col for col in selected_df.columns if col != target]
+            typer.echo(f"🧪 Selected features ({len(selected_features)}): {selected_features}")
 
             selected_df.to_csv("outputs/selected_features.csv", index=False)
-            typer.echo(f"✅ Feature selection completed. Shape: {selected_df.shape}")
-            typer.echo(f"🧪 Selected features: {selected_X.columns.tolist()}")
             typer.echo("📁 Selected features saved to outputs/selected_features.csv")
 
         except Exception as e:
             typer.echo(f"⚠️ Feature selection failed: {str(e)}")
-            typer.echo("📝 Using all processed features instead...")
-            selected_df = processed_df.copy()
-
-            # Still need to handle NaN in target if using all features
-            if selected_df[target].isna().any():
-                typer.echo(f"🧹 Removing {selected_df[target].isna().sum()} rows with NaN in target")
-                selected_df = selected_df.dropna(subset=[target])
+            typer.echo("📝 Using engineered features instead...")
+            selected_df = engineered_df.copy()
 
         # Step 7: Model Selection
         typer.echo("\n🏁 Running Model Selection...")
         typer.echo(f"📊 Final data shape: {selected_df.shape}")
-        typer.echo(f"📊 Target column: {target}")
 
-        # Final validation before model training
-        final_X = selected_df.drop(columns=[target])
-        final_y = selected_df[target]
+        # Final data validation
+        if selected_df[target].isna().any():
+            typer.echo(f"🧹 Removing {selected_df[target].isna().sum()} rows with NaN in target")
+            selected_df = selected_df.dropna(subset=[target])
 
-        typer.echo(f"📊 Final X shape: {final_X.shape}")
-        typer.echo(f"📊 Final y shape: {final_y.shape}")
+        # Check for any remaining NaN values in features
+        if selected_df.drop(columns=[target]).isna().any().any():
+            typer.echo("🧹 Filling remaining NaN values in features with median/mode")
+            for col in selected_df.columns:
+                if col != target and selected_df[col].isna().any():
+                    if selected_df[col].dtype in ['int64', 'float64']:
+                        selected_df[col] = selected_df[col].fillna(selected_df[col].median())
+                    else:
+                        selected_df[col] = selected_df[col].fillna(
+                            selected_df[col].mode().iloc[0] if not selected_df[col].mode().empty else "MISSING")
 
-        # Check for any remaining issues
-        if final_X.isna().any().any():
-            typer.echo("⚠️ Warning: NaN values found in features")
-            nan_counts = final_X.isna().sum()
-            typer.echo(f"NaN counts: {nan_counts[nan_counts > 0].to_dict()}")
-
-            # Fill NaN values in features
-            typer.echo("🧹 Filling NaN values in features with 0")
-            final_X = final_X.fillna(0)
-            selected_df = final_X.copy()
-            selected_df[target] = final_y
-
-        if final_y.isna().any():
-            typer.echo("❌ Error: NaN values still found in target - this should not happen!")
-            typer.echo(f"NaN count in target: {final_y.isna().sum()}")
+        # Final check
+        if selected_df.shape[0] < 10:
+            typer.echo("❌ Error: Not enough data left for model training (less than 10 rows)")
             return
-        else:
-            typer.echo("✅ No NaN values in target column")
 
-        # Show target distribution
+        # Show final data info
+        typer.echo(f"📊 Final features: {selected_df.shape[1] - 1}")
+        typer.echo(f"📊 Final samples: {selected_df.shape[0]}")
+
         if task == "classification":
-            typer.echo(f"📊 Target distribution: {final_y.value_counts().to_dict()}")
+            class_counts = selected_df[target].value_counts()
+            typer.echo(f"📊 Class distribution: {class_counts.to_dict()}")
+
+            # Check for class imbalance
+            min_class_count = class_counts.min()
+            if min_class_count < 2:
+                typer.echo("⚠️ Warning: Some classes have very few samples. Consider collecting more data.")
         else:
-            typer.echo(f"📊 Target stats: min={final_y.min():.2f}, max={final_y.max():.2f}, mean={final_y.mean():.2f}")
+            typer.echo(f"📊 Target range: {selected_df[target].min():.2f} to {selected_df[target].max():.2f}")
 
         # Run model selection
         model_result = model_selection_pipeline(selected_df, target_column=target, task_type=task)
         typer.echo(f"✅ Best Model: {model_result['model']}")
         typer.echo(f"📊 Metrics: {model_result['metrics']}")
+        typer.echo(f"📊 Best Score: {model_result['best_score']:.4f}")
         typer.echo("📁 Best model saved to models/best_model.pkl")
 
         typer.echo("\n🎉 Pipeline completed successfully!")

@@ -188,12 +188,24 @@ def run_pipeline(
         typer.echo(f"📊 Features shape before engineering: {X_clean.shape}")
         typer.echo(f"📊 Target shape: {y_clean.shape}")
 
-        # Apply feature engineering only to features
+        # Check for NaN in target before processing
+        if y_clean.isna().any():
+            typer.echo(
+                f"⚠️ Warning: {y_clean.isna().sum()} NaN values found in target column before feature engineering")
+
+        # Apply feature engineering only to features (NOT the target)
         X_processed = feature_engineering_pipeline(X_clean)
 
         # Combine processed features with original target
         processed_df = X_processed.copy()
         processed_df[target] = y_clean
+
+        # Verify target column after combining
+        if processed_df[target].isna().any():
+            typer.echo(
+                f"⚠️ Warning: {processed_df[target].isna().sum()} NaN values found in target column after feature engineering")
+        else:
+            typer.echo("✅ Target column has no NaN values after feature engineering")
 
         processed_df.to_csv("outputs/processed_data.csv", index=False)
         typer.echo(f"🧠 Feature engineering completed. Shape: {processed_df.shape}")
@@ -208,6 +220,16 @@ def run_pipeline(
 
         typer.echo(f"📊 Features for selection: {X_for_selection.shape}")
         typer.echo(f"📊 Target for selection: {y_for_selection.shape}")
+
+        # Final check before feature selection
+        if y_for_selection.isna().any():
+            typer.echo(f"⚠️ Warning: {y_for_selection.isna().sum()} NaN values in target before feature selection")
+            # Drop rows with NaN in target
+            valid_mask = ~y_for_selection.isna()
+            X_for_selection = X_for_selection[valid_mask]
+            y_for_selection = y_for_selection[valid_mask]
+            typer.echo(
+                f"🧹 Removed rows with NaN in target. New shape: X={X_for_selection.shape}, y={y_for_selection.shape}")
 
         # Apply feature selection
         try:
@@ -226,7 +248,7 @@ def run_pipeline(
 
             # Combine selected features with target
             selected_df = selected_X.copy()
-            selected_df[target] = y_for_selection
+            selected_df[target] = y_for_selection.reset_index(drop=True)  # Reset index to align properly
 
             selected_df.to_csv("outputs/selected_features.csv", index=False)
             typer.echo(f"✅ Feature selection completed. Shape: {selected_df.shape}")
@@ -237,6 +259,11 @@ def run_pipeline(
             typer.echo(f"⚠️ Feature selection failed: {str(e)}")
             typer.echo("📝 Using all processed features instead...")
             selected_df = processed_df.copy()
+
+            # Still need to handle NaN in target if using all features
+            if selected_df[target].isna().any():
+                typer.echo(f"🧹 Removing {selected_df[target].isna().sum()} rows with NaN in target")
+                selected_df = selected_df.dropna(subset=[target])
 
         # Step 7: Model Selection
         typer.echo("\n🏁 Running Model Selection...")
@@ -256,9 +283,18 @@ def run_pipeline(
             nan_counts = final_X.isna().sum()
             typer.echo(f"NaN counts: {nan_counts[nan_counts > 0].to_dict()}")
 
+            # Fill NaN values in features
+            typer.echo("🧹 Filling NaN values in features with 0")
+            final_X = final_X.fillna(0)
+            selected_df = final_X.copy()
+            selected_df[target] = final_y
+
         if final_y.isna().any():
-            typer.echo("⚠️ Warning: NaN values found in target")
+            typer.echo("❌ Error: NaN values still found in target - this should not happen!")
             typer.echo(f"NaN count in target: {final_y.isna().sum()}")
+            return
+        else:
+            typer.echo("✅ No NaN values in target column")
 
         # Show target distribution
         if task == "classification":

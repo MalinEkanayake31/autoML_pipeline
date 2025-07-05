@@ -11,6 +11,7 @@ from app.eda import perform_eda, save_eda_report
 from app.features import robust_feature_engineering_pipeline
 from app.feature_selection import robust_feature_selection_pipeline
 from app.model_selection import model_selection_pipeline
+from app.hyperparameter_tuning import hyperparameter_tuning
 
 app = typer.Typer()
 
@@ -285,6 +286,20 @@ def run_pipeline(
         typer.echo(f"❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
+
+    typer.echo("\n🧪 Running Hyperparameter Tuning...")
+    tuning_result = hyperparameter_tuning(
+        selected_df,
+        target_column=target,
+        model_name=model_result["model"],
+        task_type=task,
+        method="random"  # or "grid"
+    )
+
+    typer.echo(f"🎯 Tuned Model: {tuning_result['model']}")
+    typer.echo(f"✅ Best Params: {tuning_result['best_params']}")
+    typer.echo(f"📊 Cross-validated Score: {tuning_result['score']}")
+    typer.echo("📁 Tuned model saved to models/tuned_model.pkl")
 
 
 @app.command()

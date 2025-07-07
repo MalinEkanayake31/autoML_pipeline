@@ -12,6 +12,7 @@ from app.features import robust_feature_engineering_pipeline
 from app.feature_selection import robust_feature_selection_pipeline
 from app.model_selection import model_selection_pipeline
 from app.hyperparameter_tuning import hyperparameter_tuning
+from app.model_evaluation import evaluate_model_on_test
 
 app = typer.Typer()
 
@@ -300,6 +301,18 @@ def run_pipeline(
     typer.echo(f"✅ Best Params: {tuning_result['best_params']}")
     typer.echo(f"📊 Cross-validated Score: {tuning_result['score']}")
     typer.echo("📁 Tuned model saved to models/tuned_model.pkl")
+
+    # Step 9: Model Evaluation – Test the Final Model
+    typer.echo("\n🧪 Evaluating Tuned Model on Hold-out Test Set...")
+    # For demonstration, use selected_df as test set (replace with real hold-out set in production)
+    test_metrics = evaluate_model_on_test(
+        selected_df,  # Replace with your real test set
+        target_column=target,
+        model_path="models/tuned_model.pkl",
+        task_type=task,
+        output_dir="outputs"
+    )
+    typer.echo(f"📊 Test Metrics: {test_metrics}")
 
 
 @app.command()

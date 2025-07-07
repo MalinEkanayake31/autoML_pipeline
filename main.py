@@ -314,6 +314,26 @@ def run_pipeline(
     )
     typer.echo(f"📊 Test Metrics: {test_metrics}")
 
+    # Step 10: Model Explainability – SHAP & Feature Importance
+    try:
+        from app.model_explainability import explain_with_shap, plot_feature_importance
+        import joblib
+        typer.echo("\n🔍 Running Model Explainability (SHAP & Feature Importance)...")
+        model = joblib.load("models/tuned_model.pkl")
+        X_test = selected_df.drop(columns=[target]).astype(float)  # Ensure all features are float for SHAP
+        feature_names = X_test.columns.tolist()
+        # SHAP explanations
+        explain_with_shap(model, X_test, output_dir="outputs")
+        typer.echo("✅ SHAP summary plot saved to outputs/shap_summary.png")
+        # Feature importance (tree-based models)
+        importances = plot_feature_importance(model, feature_names, output_dir="outputs")
+        if importances is not None:
+            typer.echo("✅ Feature importance plot saved to outputs/feature_importance.png")
+        else:
+            typer.echo("ℹ️ Feature importances not available for this model type.")
+    except Exception as e:
+        typer.echo(f"⚠️ Model explainability step failed: {str(e)}")
+
 
 @app.command()
 def info(file_path: str = typer.Option(..., "--file-path", help="Path to the dataset CSV file")):

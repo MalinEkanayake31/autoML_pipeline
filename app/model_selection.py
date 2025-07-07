@@ -321,7 +321,14 @@ def model_selection_pipeline(
                 score = metrics["r2"]
                 is_better = score > best_score
 
-            if is_better:
+            # Always set best_model_name to the first successful model if none is set
+            if best_model_name == "":
+                best_score = score
+                best_model = model
+                best_metrics = metrics
+                best_model_name = name
+                print(f"🏆 New best model: {name} (Score: {score:.4f})")
+            elif is_better:
                 best_score = score
                 best_model = model
                 best_metrics = metrics

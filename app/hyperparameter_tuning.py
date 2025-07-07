@@ -21,6 +21,8 @@ def get_hyperparameter_space(model_name: str, task_type: str):
                 "max_depth": [None, 10, 20],
                 "min_samples_split": [2, 5]
             }
+        else:
+            raise ValueError(f"Unsupported classification model: {model_name}")
     else:
         if model_name == "Ridge":
             model = Ridge()
@@ -34,6 +36,8 @@ def get_hyperparameter_space(model_name: str, task_type: str):
                 "max_depth": [None, 10, 20],
                 "min_samples_split": [2, 5]
             }
+        else:
+            raise ValueError(f"Unsupported regression model: {model_name}")
     return model, param_grid
 
 

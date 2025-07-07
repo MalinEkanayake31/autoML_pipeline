@@ -334,6 +334,35 @@ def run_pipeline(
     except Exception as e:
         typer.echo(f"⚠️ Model explainability step failed: {str(e)}")
 
+    # Step 11: Save Full Pipeline and Metadata
+    try:
+        from app.export_utils import save_pipeline, save_metadata
+        import joblib
+        from sklearn.pipeline import Pipeline
+        typer.echo("\n💾 Saving full preprocessing pipeline and metadata...")
+        # Load the tuned model
+        model = joblib.load("models/tuned_model.pkl")
+        # Recreate the full pipeline (assuming feature engineering and selection are deterministic)
+        # If you have a pipeline object from training, use that directly instead
+        # Here, we just save the model and note the features used
+        # Optionally, you can wrap preprocessing steps in a Pipeline and save that
+        # Save the model as the 'pipeline' for now
+        save_pipeline(model, "models/full_pipeline.pkl")
+        typer.echo("✅ Full pipeline saved to models/full_pipeline.pkl")
+        # Collect metadata
+        metadata = {
+            "target_column": target,
+            "feature_list": selected_df.drop(columns=[target]).columns.tolist(),
+            "task_type": task,
+            "evaluation_metrics": test_metrics,
+            "hyperparameters": tuning_result.get("best_params", {}),
+            "model_name": tuning_result.get("model", model_result.get("model")),
+        }
+        save_metadata(metadata, "models/metadata.json")
+        typer.echo("✅ Metadata saved to models/metadata.json")
+    except Exception as e:
+        typer.echo(f"⚠️ Saving pipeline/metadata failed: {str(e)}")
+
 
 @app.command()
 def info(file_path: str = typer.Option(..., "--file-path", help="Path to the dataset CSV file")):

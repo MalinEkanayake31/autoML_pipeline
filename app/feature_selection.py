@@ -234,7 +234,7 @@ def safe_mutual_info_selection(df: pd.DataFrame, target: pd.Series, top_k: int =
 
 def robust_feature_selection_pipeline(
         df: pd.DataFrame,
-        target_column: str,
+        target_column: list[str],
         method: Literal["variance", "rfe", "mutual_info", "univariate", "auto"] = "auto",
         k: int = 10,
         task_type: str = "classification",
@@ -246,11 +246,12 @@ def robust_feature_selection_pipeline(
     print(f"Starting robust feature selection with shape: {df.shape}")
 
     # Validate inputs
-    if target_column not in df.columns:
-        raise ValueError(f"Target column '{target_column}' not found in dataset")
+    for col in target_column:
+        if col not in df.columns:
+            raise ValueError(f"Target column '{col}' not found in dataset")
 
-    # Separate features and target
-    X = df.drop(columns=[target_column]).copy()
+    # Separate features and targets
+    X = df.drop(columns=target_column).copy()
     y = df[target_column].copy()
 
     print(f"Features shape: {X.shape}")
@@ -283,33 +284,34 @@ def robust_feature_selection_pipeline(
 
     print(f"Selecting {k} features using {method} method")
 
-    # Apply selected method with fallbacks
+    # Apply selected method with fallbacks (use first target for selection)
+    main_target = y.columns[0]
     try:
         if method == "variance":
             X_selected = safe_variance_filter(X, threshold=variance_threshold)
         elif method == "rfe":
-            X_selected = safe_rfe_selection(X, y, num_features=k, task_type=task_type)
+            X_selected = safe_rfe_selection(X, y[main_target], num_features=k, task_type=task_type)
         elif method == "mutual_info":
-            X_selected = safe_mutual_info_selection(X, y, top_k=k, task_type=task_type)
+            X_selected = safe_mutual_info_selection(X, y[main_target], top_k=k, task_type=task_type)
         elif method == "univariate":
-            X_selected = safe_univariate_selection(X, y, top_k=k, task_type=task_type)
+            X_selected = safe_univariate_selection(X, y[main_target], top_k=k, task_type=task_type)
         else:
             raise ValueError(f"Unknown method: {method}")
 
         # Ensure we have some features
         if X_selected.shape[1] == 0:
             print("Warning: No features selected, using univariate selection as fallback")
-            X_selected = safe_univariate_selection(X, y, top_k=k, task_type=task_type)
+            X_selected = safe_univariate_selection(X, y[main_target], top_k=k, task_type=task_type)
 
-        # Combine with target
+        # Combine with targets
         result_df = X_selected.copy()
+        for col in y.columns:
+            result_df[col] = y[col]
 
         # Handle target alignment
         if len(result_df) != len(y):
             # Align indices
             result_df = result_df.reindex(y.index)
-
-        result_df[target_column] = y
 
         print(f"Final shape: {result_df.shape}")
         print(f"Selected features: {X_selected.columns.tolist()}")

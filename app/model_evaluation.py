@@ -68,21 +68,34 @@ def evaluate_regression(y_true, y_pred, output_dir=None):
 
 
 def evaluate_model_on_test(test_df, target_column, model_path, task_type, output_dir="outputs"):
+    import numpy as np
     os.makedirs(output_dir, exist_ok=True)
     model = joblib.load(model_path)
-    X_test = test_df.drop(columns=[target_column])
+    if isinstance(target_column, str):
+        target_column = [target_column]
+    X_test = test_df.drop(columns=target_column)
     y_test = test_df[target_column]
-
-    if task_type == "classification":
-        y_pred = model.predict(X_test)
-        y_proba = model.predict_proba(X_test) if hasattr(model, "predict_proba") else None
-        metrics = evaluate_classification(y_test, y_pred, y_proba, output_dir)
+    metrics = {}
+    if len(target_column) == 1:
+        col = target_column[0]
+        if task_type == "classification":
+            y_pred = model.predict(X_test)
+            y_proba = model.predict_proba(X_test) if hasattr(model, "predict_proba") else None
+            metrics[col] = evaluate_classification(y_test[col], y_pred, y_proba, output_dir)
+        else:
+            y_pred = model.predict(X_test)
+            metrics[col] = evaluate_regression(y_test[col], y_pred, output_dir)
     else:
         y_pred = model.predict(X_test)
-        metrics = evaluate_regression(y_test, y_pred, output_dir)
-
+        for i, col in enumerate(target_column):
+            if task_type == "classification":
+                metrics[col] = evaluate_classification(y_test[col], y_pred[:, i], None, output_dir)
+            else:
+                metrics[col] = evaluate_regression(y_test[col], y_pred[:, i], output_dir)
     # Save metrics
     metrics_path = os.path.join(output_dir, "test_metrics.json")
-    pd.Series(metrics).to_json(metrics_path)
+    import json
+    with open(metrics_path, "w") as f:
+        json.dump(metrics, f, indent=2)
     print(f"Test metrics saved to {metrics_path}")
     return metrics

@@ -190,7 +190,7 @@ def safe_remove_high_correlation(df: pd.DataFrame, threshold: float = 0.95,
 
 def robust_feature_engineering_pipeline(
         df: pd.DataFrame,
-        target_column: str,
+        target_column: list[str],
         encoding: str = "onehot",
         scale: str = "standard",
         drop_corr: bool = True,
@@ -202,12 +202,13 @@ def robust_feature_engineering_pipeline(
     """
     print(f"Starting robust feature engineering with shape: {df.shape}")
 
-    # Ensure target column exists
-    if target_column not in df.columns:
-        raise ValueError(f"Target column '{target_column}' not found in dataset")
+    # Ensure all target columns exist
+    for col in target_column:
+        if col not in df.columns:
+            raise ValueError(f"Target column '{col}' not found in dataset")
 
-    # Separate features and target
-    X = df.drop(columns=[target_column]).copy()
+    # Separate features and targets
+    X = df.drop(columns=target_column).copy()
     y = df[target_column].copy()
 
     print(f"Features shape: {X.shape}")
@@ -248,9 +249,10 @@ def robust_feature_engineering_pipeline(
             print(f"Warning: Infinite values in {col}, replacing with column median")
             X[col] = X[col].replace([np.inf, -np.inf], X[col].median())
 
-    # Combine with target
+    # Combine with targets
     result_df = X.copy()
-    result_df[target_column] = y
+    for col in y.columns:
+        result_df[col] = y[col]
 
     print(f"\nFinal shape: {result_df.shape}")
     print(f"Final columns: {result_df.columns.tolist()}")

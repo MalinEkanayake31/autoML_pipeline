@@ -18,17 +18,20 @@ def basic_stats(df: pd.DataFrame) -> Dict:
     return stats
 
 
-def check_class_balance(df: pd.DataFrame, target_column: str) -> Dict:
-    if target_column not in df.columns:
-        return {"error": "Target column not found in dataset"}
+def check_class_balance(df: pd.DataFrame, target_columns: list[str]) -> Dict:
+    result = {}
+    for col in target_columns:
+        if col not in df.columns:
+            result[col] = {"error": f"Target column {col} not found in dataset"}
+        else:
+            counter = dict(Counter(df[col]))
+            result[col] = {"class_distribution": counter}
+    return result
 
-    counter = dict(Counter(df[target_column]))
-    return {"class_distribution": counter}
 
-
-def perform_eda(df: pd.DataFrame, target_column: str) -> Dict:
+def perform_eda(df: pd.DataFrame, target_columns: list[str]) -> Dict:
     stats = basic_stats(df)
-    stats["class_balance"] = check_class_balance(df, target_column)
+    stats["class_balance"] = check_class_balance(df, target_columns)
     return stats
 
 

@@ -43,12 +43,15 @@ def get_hyperparameter_space(model_name: str, task_type: str):
 
 def hyperparameter_tuning(
         df: pd.DataFrame,
-        target_column: str,
+        target_column: Union[str, list],
         model_name: str,
         task_type: Literal["classification", "regression"],
         method: Literal["grid", "random"] = "random"
 ) -> Dict:
-    X = df.drop(columns=[target_column])
+    # Ensure target_column is a flat list
+    if isinstance(target_column, str):
+        target_column = [target_column]
+    X = df.drop(columns=target_column)
     y = df[target_column]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 

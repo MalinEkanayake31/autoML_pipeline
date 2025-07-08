@@ -3,7 +3,7 @@ import os
 
 class Config(BaseModel):
     file_path: str
-    target_column: str
+    target_columns: list[str]
     task_type: str
 
     @field_validator("file_path")

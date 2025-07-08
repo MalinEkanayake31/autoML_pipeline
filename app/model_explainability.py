@@ -7,6 +7,7 @@ import numpy as np
 def explain_with_shap(model, X, output_dir, model_type="auto", max_display=20):
     """
     Compute and save SHAP global feature importance plot.
+    For multi-output models, call this function for each sub-model/target separately.
     Optionally, save per-instance explanations for the first few samples.
     """
     os.makedirs(output_dir, exist_ok=True)

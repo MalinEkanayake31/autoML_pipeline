@@ -102,7 +102,7 @@ def show_dataset_info(df: pd.DataFrame):
 def run_pipeline(
         file_path: str = typer.Option(..., "--file-path", help="Path to the dataset CSV file"),
         target: str = typer.Option(None, "--target",
-                                   help="Target column name (optional - will show options if not provided)"),
+                                   help="Target column name(s), comma-separated for multiple (optional - will show options if not provided)"),
         task: str = typer.Option("auto", "--task", help="Task type: classification, regression, or auto"),
         missing_strategy: str = typer.Option("drop", "--missing-strategy",
                                              help="Strategy for missing values: drop, mean, mode"),
@@ -115,36 +115,35 @@ def run_pipeline(
     Run the complete AutoML pipeline
     """
     try:
-        # Ensure directories exist
         ensure_directories()
-
-        # Step 1: Load dataset
         typer.echo("🔄 Loading dataset...")
         df = load_dataset(file_path)
         typer.echo(f"✅ Dataset loaded: {df.shape[0]} rows × {df.shape[1]} columns")
 
+        # Parse target columns
+        target_columns = [col.strip() for col in target.split(",")] if target else None
+
         # Show dataset info if requested or if no target provided
-        if show_info or target is None:
+        if show_info or not target_columns:
             show_dataset_info(df)
-            if target is None:
-                typer.echo("\n❓ Please specify a target column using --target <column_name>")
+            if not target_columns:
+                typer.echo("\n❓ Please specify target column(s) using --target <col1,col2,...>")
                 return
 
-        # Validate target column
-        is_valid, suggestion = validate_target_column(df, target)
-        if not is_valid:
-            typer.echo(f"❌ Error: Target column '{target}' not found in dataset")
-            typer.echo(f"💡 {suggestion}")
+        # Validate target columns
+        missing_targets = [col for col in target_columns if col not in df.columns]
+        if missing_targets:
+            typer.echo(f"❌ Error: Target column(s) {missing_targets} not found in dataset")
             show_dataset_info(df)
             return
 
-        # Auto-detect task type if not specified
+        # Auto-detect task type if not specified (use first target for detection)
         if task == "auto":
-            task = detect_task_type(df, target)
+            task = detect_task_type(df, target_columns[0])
             typer.echo(f"🔍 Auto-detected task type: {task}")
 
         # Validate configuration
-        config = Config(file_path=file_path, target_column=target, task_type=task)
+        config = Config(file_path=file_path, target_columns=target_columns, task_type=task)
 
         # Step 2: Analyze dataset
         typer.echo("\n🔍 Analyzing dataset...")
@@ -155,9 +154,18 @@ def run_pipeline(
 
         # Step 3: EDA
         typer.echo("\n🔍 Running EDA...")
-        eda_report = perform_eda(df, target)
-        if 'error' not in eda_report['class_balance']:
-            typer.echo(f"🧮 Class Balance: {eda_report['class_balance']['class_distribution']}")
+        eda_report = perform_eda(df, target_columns)
+        # Print class balance for each target (if classification), or skip for regression
+        if task == "classification":
+            for target_col in target_columns:
+                class_info = eda_report['class_balance'].get(target_col, {})
+                if 'class_distribution' in class_info:
+                    typer.echo(f"🧮 Class Balance for {target_col}: {class_info['class_distribution']}")
+                else:
+                    typer.echo(f"ℹ️ No class distribution info for {target_col}.")
+        else:
+            for target_col in target_columns:
+                typer.echo(f"ℹ️ Skipping class balance for regression target: {target_col}")
         save_eda_report(eda_report)
         typer.echo("📁 EDA report saved to outputs/eda_report.json")
 
@@ -170,8 +178,8 @@ def run_pipeline(
         typer.echo("📁 Cleaned data saved to outputs/cleaned_data.csv")
 
         # Verify target column still exists after cleaning
-        if target not in cleaned_df.columns:
-            typer.echo(f"❌ Error: Target column '{target}' was removed during cleaning")
+        if not all(col in cleaned_df.columns for col in target_columns):
+            typer.echo(f"❌ Error: Target column(s) {set(target_columns) - set(cleaned_df.columns)} were removed during cleaning")
             typer.echo(f"Available columns after cleaning: {cleaned_df.columns.tolist()}")
             return
 
@@ -188,7 +196,7 @@ def run_pipeline(
 
         engineered_df = robust_feature_engineering_pipeline(
             cleaned_df,
-            target_column=target,
+            target_column=target_columns,
             encoding="onehot",
             scale="standard",
             drop_corr=True,
@@ -205,7 +213,7 @@ def run_pipeline(
         original_shape = engineered_df.shape
 
         # Adjust num_features based on available features
-        available_features = engineered_df.shape[1] - 1  # Subtract 1 for target column
+        available_features = engineered_df.shape[1] - len(target_columns)  # Subtract target columns
         max_features = min(num_features, available_features, 50)  # Cap at 50 features
 
         if max_features != num_features:
@@ -215,7 +223,7 @@ def run_pipeline(
         try:
             selected_df = robust_feature_selection_pipeline(
                 engineered_df,
-                target_column=target,
+                target_column=target_columns,
                 method=feature_selection_method,
                 k=max_features,
                 task_type=task,
@@ -223,7 +231,7 @@ def run_pipeline(
             )
 
             typer.echo(f"✅ Feature selection completed. Shape: {original_shape} → {selected_df.shape}")
-            selected_features = [col for col in selected_df.columns if col != target]
+            selected_features = [col for col in selected_df.columns if col not in target_columns]
             typer.echo(f"🧪 Selected features ({len(selected_features)}): {selected_features}")
 
             selected_df.to_csv("outputs/selected_features.csv", index=False)
@@ -234,20 +242,25 @@ def run_pipeline(
             typer.echo("📝 Using engineered features instead...")
             selected_df = engineered_df.copy()
 
+        # Before using selected_df in later steps, check it exists
+        if 'selected_df' not in locals():
+            typer.echo("❌ Error: selected_df is not available. Exiting pipeline.")
+            return
+
         # Step 7: Model Selection
         typer.echo("\n🏁 Running Model Selection...")
         typer.echo(f"📊 Final data shape: {selected_df.shape}")
 
         # Final data validation
-        if selected_df[target].isna().any():
-            typer.echo(f"🧹 Removing {selected_df[target].isna().sum()} rows with NaN in target")
-            selected_df = selected_df.dropna(subset=[target])
+        if selected_df[target_columns].isna().any().any():
+            typer.echo(f"🧹 Removing {selected_df[target_columns].isna().sum().sum()} rows with NaN in target(s)")
+            selected_df = selected_df.dropna(subset=target_columns)
 
         # Check for any remaining NaN values in features
-        if selected_df.drop(columns=[target]).isna().any().any():
+        if selected_df.drop(columns=target_columns).isna().any().any():
             typer.echo("🧹 Filling remaining NaN values in features with median/mode")
             for col in selected_df.columns:
-                if col != target and selected_df[col].isna().any():
+                if col not in target_columns and selected_df[col].isna().any():
                     if selected_df[col].dtype in ['int64', 'float64']:
                         selected_df[col] = selected_df[col].fillna(selected_df[col].median())
                     else:
@@ -260,22 +273,24 @@ def run_pipeline(
             return
 
         # Show final data info
-        typer.echo(f"📊 Final features: {selected_df.shape[1] - 1}")
+        typer.echo(f"📊 Final features: {selected_df.shape[1] - len(target_columns)}")
         typer.echo(f"📊 Final samples: {selected_df.shape[0]}")
 
         if task == "classification":
-            class_counts = selected_df[target].value_counts()
-            typer.echo(f"📊 Class distribution: {class_counts.to_dict()}")
+            for target_col in target_columns:
+                class_counts = selected_df[target_col].value_counts()
+                typer.echo(f"📊 Class distribution for {target_col}: {class_counts.to_dict()}")
 
-            # Check for class imbalance
-            min_class_count = class_counts.min()
-            if min_class_count < 2:
-                typer.echo("⚠️ Warning: Some classes have very few samples. Consider collecting more data.")
+                # Check for class imbalance
+                min_class_count = class_counts.min()
+                if min_class_count < 2:
+                    typer.echo(f"⚠️ Warning: Some classes for {target_col} have very few samples. Consider collecting more data.")
         else:
-            typer.echo(f"📊 Target range: {selected_df[target].min():.2f} to {selected_df[target].max():.2f}")
+            for target_col in target_columns:
+                typer.echo(f"📊 Target range for {target_col}: {selected_df[target_col].min():.2f} to {selected_df[target_col].max():.2f}")
 
         # Run model selection
-        model_result = model_selection_pipeline(selected_df, target_column=target, task_type=task)
+        model_result = model_selection_pipeline(selected_df, target_column=target_columns, task_type=task)
         typer.echo(f"✅ Best Model: {model_result['model']}")
         typer.echo(f"📊 Metrics: {model_result['metrics']}")
         typer.echo(f"📊 Best Score: {model_result['best_score']:.4f}")
@@ -291,7 +306,7 @@ def run_pipeline(
     typer.echo("\n🧪 Running Hyperparameter Tuning...")
     tuning_result = hyperparameter_tuning(
         selected_df,
-        target_column=target,
+        target_column=target_columns,
         model_name=model_result["model"],
         task_type=task,
         method="random"  # or "grid"
@@ -307,7 +322,7 @@ def run_pipeline(
     # For demonstration, use selected_df as test set (replace with real hold-out set in production)
     test_metrics = evaluate_model_on_test(
         selected_df,  # Replace with your real test set
-        target_column=target,
+        target_column=target_columns,
         model_path="models/tuned_model.pkl",
         task_type=task,
         output_dir="outputs"
@@ -320,7 +335,7 @@ def run_pipeline(
         import joblib
         typer.echo("\n🔍 Running Model Explainability (SHAP & Feature Importance)...")
         model = joblib.load("models/tuned_model.pkl")
-        X_test = selected_df.drop(columns=[target]).astype(float)  # Ensure all features are float for SHAP
+        X_test = selected_df.drop(columns=target_columns).astype(float)  # Ensure all features are float for SHAP
         feature_names = X_test.columns.tolist()
         # SHAP explanations
         explain_with_shap(model, X_test, output_dir="outputs")
@@ -351,8 +366,8 @@ def run_pipeline(
         typer.echo("✅ Full pipeline saved to models/full_pipeline.pkl")
         # Collect metadata
         metadata = {
-            "target_column": target,
-            "feature_list": selected_df.drop(columns=[target]).columns.tolist(),
+            "target_column": target_columns,
+            "feature_list": selected_df.drop(columns=target_columns).columns.tolist(),
             "task_type": task,
             "evaluation_metrics": test_metrics,
             "hyperparameters": tuning_result.get("best_params", {}),

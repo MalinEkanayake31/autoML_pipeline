@@ -58,6 +58,7 @@ uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
+    df.columns = [col.lower() for col in df.columns]  # Normalize columns to lowercase
     st.success(f"Loaded dataset with shape: {df.shape}")
     st.dataframe(df.head())
 
@@ -65,6 +66,7 @@ if uploaded_file:
     st.header("2. Select Target Column(s)")
     columns = df.columns.tolist()
     target_columns = st.multiselect("Select target column(s)", columns)
+    target_columns = [col.lower() for col in target_columns]  # Normalize selection to lowercase
 
     if target_columns:
         # --- 3. Pipeline Configuration ---

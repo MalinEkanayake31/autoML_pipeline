@@ -61,8 +61,7 @@ with st.sidebar:
     config = None
     show_advanced = False
     train_clicked = False
-    predict_clicked = False
-    prediction_file = None
+    # Removed Prediction section (header, file uploader, and predict button)
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         df.columns = [col.lower() for col in df.columns]
@@ -92,9 +91,7 @@ with st.sidebar:
                 max_cardinality = config["max_cardinality"]
             train_clicked = st.button("🚀 Train Model")
             st.markdown("---")
-            st.header("Prediction")
-            prediction_file = st.file_uploader("Upload data for prediction", type=["csv"], key="predict_file")
-            predict_clicked = st.button("🔮 Predict")
+            # Removed Prediction section (header, file uploader, and predict button)
 
 # --- MAIN AREA ---
 if uploaded_file and target_columns and train_clicked:
@@ -229,21 +226,4 @@ if uploaded_file and target_columns and train_clicked:
             st.download_button("Download SHAP Summary Plot", f, "shap_summary.png")
 
 # --- PREDICTION AREA ---
-prediction_results = None
-if prediction_file and predict_clicked:
-    import joblib
-    import pandas as pd
-    st.header("Prediction Results")
-    try:
-        model = joblib.load("models/tuned_model.pkl")
-        pred_df = pd.read_csv(prediction_file)
-        pred_df.columns = [col.lower() for col in pred_df.columns]
-        # Drop target columns if present
-        pred_features = pred_df.drop(columns=[col for col in target_columns if col in pred_df.columns], errors='ignore')
-        preds = model.predict(pred_features)
-        pred_df['prediction'] = preds
-        with st.expander("Prediction Output", expanded=True):
-            st.dataframe(pred_df)
-            st.download_button("Download Predictions", pred_df.to_csv(index=False).encode('utf-8'), "predictions.csv")
-    except Exception as e:
-        st.error(f"Prediction failed: {e}") 
+# Removed prediction area: all code that runs when prediction_file and predict_clicked 
